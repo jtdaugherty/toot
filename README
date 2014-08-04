@@ -1,2 +1,38 @@
 
-This is a prototype of a vty-ui-based twitter client.
+This is a vty-ui-based twitter client.
+
+Features for now:
+
+  * Shows you a list of tweets from your timeline.
+  * Refreshes once per minute.
+  * Extremely likely to exceed twitter's API rate limit, as the limit is
+    totally unreasonable.
+
+To build:
+
+  git clone https://github.com/jtdaugherty/toot.git
+  git clone https://github.com/jtdaugherty/vty-ui.git
+  git clone https://github.com/jtdaugherty/vty-ui-extras.git
+  cabal update
+  cd toot
+  cabal sandbox init
+  cabal sandbox add-source ../vty-ui
+  cabal sandbox add-source ../vty-ui-extras
+  cabal install -j
+
+To run this program, you'll need a configuration file containing OAuth
+credentials required to access your account from the client.  To get those
+you'll need to create an "app" on dev.twitter.com.  Once you have the "API key"
+and "API secret" for your app, put them into toot.cfg as follows:
+
+  [consumer]
+  oauth_consumer_key=<api key>
+  oauth_consumer_secret=<api secret>
+
+On the same page where your API credentials are listed, you'll also see a
+section called "Your access token".  The token and token secret need to be in
+the config as follows:
+
+  [token]
+  oauth_token=<token>
+  oauth_token_secret=<token secret>
