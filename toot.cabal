@@ -10,9 +10,11 @@ executable toot
   main-is:           Toot.hs
   hs-source-dirs:    src
   other-modules:     Twitter
+  extra-lib-dirs:    /usr/local/opt/icu4c/lib
+  include-dirs:      /usr/local/opt/icu4c/include
   ghc-options:       -threaded -Wall -fno-warn-unused-do-bind
   default-language:  Haskell2010
-  build-depends:     base >=4.6 && <4.7,
+  build-depends:     base,
                      transformers,
                      monad-logger,
                      text,
@@ -22,11 +24,11 @@ executable toot
                      http-conduit,
                      http-types,
                      authenticate-oauth,
-                     twitter-conduit,
+                     twitter-conduit >= 0.1.0,
                      twitter-types,
+                     twitter-types-lens,
                      lens,
                      ini,
                      unordered-containers,
                      vty,
-                     vty-ui >= 1.7,
-                     vty-ui-extras >= 0.3
+                     brick

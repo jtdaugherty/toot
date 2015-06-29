@@ -137,11 +137,6 @@ buildApp = do
 buildTimeline :: IO (Widget Timeline)
 buildTimeline = newList 2
 
-withSpinner :: App -> IO a -> IO a
-withSpinner app action = do
-    app^.startSpinner
-    action `finally` (app^.stopSpinner)
-
 tweetHighlighter :: IO Formatter
 tweetHighlighter = do
     atRegex <- R.regex [] usernamePattern
@@ -152,21 +147,6 @@ tweetHighlighter = do
                      , highlight urlRegex $ fgColor blue
                      , highlight htRegex $ fgColor white
                      ]
-
-__startSpinner :: Chan ThreadId -> Widget FormattedText -> IO ()
-__startSpinner ch w = do
-    let states = ["▁", "▃", "▄", "▅", "▆", "▇", "█", "▇", "▆", "▅", "▄", "▃"]
-        threadBody = do
-            forM_ (concat $ repeat states) $ \s -> do
-              schedule $ setText w s
-              threadDelay $ 1000000 `div` (length states)
-
-    tid <- forkIO $ threadBody `finally` (schedule $ setText w " ")
-    writeChan ch tid
-
-__stopSpinner :: Chan ThreadId -> IO ()
-__stopSpinner ch = killThread =<< readChan ch
-
 getLastSelected :: Widget (List a b) -> IO Bool
 getLastSelected lst = do
     sel <- getSelected lst
