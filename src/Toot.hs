@@ -39,6 +39,9 @@ data TootEvent = Notify AttrName T.Text
 nickColumnWidth :: Int
 nickColumnWidth = 20
 
+maxTweetLength :: Int
+maxTweetLength = 140
+
 timelineUpdateThread :: TWInfo -> Chan TootEvent -> IO ()
 timelineUpdateThread twInfo chan = updateTimeline twInfo chan Nothing
 
@@ -71,7 +74,7 @@ updateTimeline twInfo chan since = do
                 return $ if null ss then Nothing else Just $ (last ss)^.statusId
             Left e -> do
                 writeChan chan $ Notify "error" $ T.pack $ "Error fetching tweets: " ++ e
-                return Nothing
+                return since
 
   next <- doFetch `catch` \(e::TwitterError) -> do
       case e of
@@ -99,14 +102,25 @@ data St =
 
 makeLenses ''St
 
+tweetLengthTooLong :: AttrName
+tweetLengthTooLong = "tweetTooLong"
+
+tweetEditOkay :: AttrName
+tweetEditOkay = "tweetEditOkay"
+
+tweetEditTooLong :: AttrName
+tweetEditTooLong = "tweetEditTooLong"
+
 theAttrMap :: AttrMap
 theAttrMap = attrMap (V.white `on` V.black)
     [ ("notification",          fg V.green)
     , ("error",                 fg V.red)
     , ("header",                fg V.cyan)
     , ("nickname",              fg V.magenta)
-    , (editAttr,                fg V.cyan)
+    , (tweetEditOkay,           fg V.cyan)
+    , (tweetEditTooLong,        V.white `on` V.red)
     , ("retweet",               V.yellow `on` V.blue)
+    , (tweetLengthTooLong,      fg V.red)
     ]
 
 appEvent :: TootEvent -> St -> EventM (Next St)
@@ -121,7 +135,9 @@ appEvent e st =
             scrollBy timelineScroll (-1)
             continue st
 
+        -- TODO: on Enter keypress, do nothing if the tweet is too long
         VtyEvent kev@(V.EvKey _ _) -> continue $ st & editTweet %~ (handleEvent kev)
+
         Notify aName t -> continue $ st & notification .~ Just (aName, t)
         ClearNotify -> continue $ st & notification .~ Nothing
         NewTweets ss -> do
@@ -133,37 +149,21 @@ appEvent e st =
 
 mkTimelineEntry :: Status -> Widget
 mkTimelineEntry st =
-    let (isRT, uname, tweet) =
-            case st^.statusRetweeted of
-              Nothing -> ( False
-                         , st^.statusUser.userScreenName
-                         , T.intercalate (T.pack " / ") $
-                           filter (not . T.null) $ T.lines $ st^.statusText
-                         )
-              Just True -> let status = T.concat [ st^.statusText
-                                                 , " (via @"
-                                                 , st^.statusUser.userScreenName
-                                                 , ")"
-                                                 ]
-                           in ( True
-                              , st^.statusUser.userScreenName
-                              , T.unlines $ take 2 $ T.lines status
-                              )
-              Just False -> let status = st^.statusText
-                            in ( False
-                               , st^.statusUser.userScreenName
-                               , T.unlines $ take 2 $ T.lines status
-                               )
+    let isRT = case st^.statusRetweeted of
+                 Nothing -> False
+                 Just True -> True
+                 Just False -> False
 
+        uname = st^.statusUser.userScreenName
+        tweet = st^.statusText
         tweetAttr = if isRT then "retweet" else def
         nick = withAttr "nickname" $ txt uname
-        msg = withAttr tweetAttr $ padRight $ txt tweet
+        msg = padRight $ txt tweet
         paddedNick = padLeft nick
 
-    in (hLimit nickColumnWidth paddedNick) <+> ": " <+> msg
+    in withDefaultAttr tweetAttr $ (hLimit nickColumnWidth paddedNick) <+> ": " <+> msg
 
 drawTimeline :: [Status] -> Widget
-drawTimeline [] = fill ' '
 drawTimeline ss = viewport "timeline" Vertical $ vBox $ mkTimelineEntry <$> ss
 
 drawUI :: St -> [Widget]
@@ -172,7 +172,15 @@ drawUI st = [withBorderStyle unicode ui]
         nick = "@jtdaugherty"
         paddedNick = withAttr "nickname" nick
 
-        editUi = vLimit 1 $ paddedNick <+> ": " <+> renderEditor (st^.editTweet)
+        editUi = vLimit 1 $ paddedNick <+> ": " <+> (withDefaultAttr tweetEditAttr $ renderEditor (st^.editTweet))
+
+        tweetEditAttr = if (length $ st^.editTweet.editContentsL) <= maxTweetLength
+                        then tweetEditOkay
+                        else tweetEditTooLong
+
+        tweetLengthAttr = if (length $ st^.editTweet.editContentsL) <= maxTweetLength
+                          then def
+                          else tweetLengthTooLong
 
         ui = vBox [ hBox [ withAttr "header" "toot!"
                          , vLimit 1 $ fill ' '
@@ -190,8 +198,11 @@ drawUI st = [withBorderStyle unicode ui]
                       hBox [ hLimit 1 hBorder
                            , "[help text here]"
                            , hBorder
-                           , str $ show $ length $ st^.editTweet.editContentsL
-                           , "/140"
+                           , withAttr tweetLengthAttr $
+                             hBox [ str $ show $ length $ st^.editTweet.editContentsL
+                                  , "/"
+                                  , str $ show maxTweetLength
+                                  ]
                            , hLimit 1 hBorder
                            ]
                   , editUi
