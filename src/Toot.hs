@@ -7,7 +7,8 @@ import Control.Lens
 import Control.Concurrent
 import Control.Applicative
 import Control.Exception
-import Control.Monad (forM_, void)
+import Control.Monad (forM_)
+import Data.Monoid
 import Data.Ini
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as H
@@ -16,6 +17,8 @@ import Web.Authenticate.OAuth
 import Web.Twitter.Conduit.Monad
 import Web.Twitter.Types.Lens
 import System.Exit
+import qualified Data.Aeson as A
+import qualified Data.ByteString.Lazy as BSL
 
 import qualified Graphics.Vty as V
 import Brick.Core
@@ -36,14 +39,24 @@ data TootEvent = Notify AttrName T.Text
                | StopSpinner
                | VtyEvent V.Event
 
+-- TODO:
+-- Replace entities (&amp;)
+-- Highlight hashtags, mentions, URLs in tweets and editor
+-- Do something with media?
+-- Support posting tweets
+-- Mark replies to you with a special color
+-- Support scrolling through tweets to select one to reply to
+
+-- The max length for a twitter username is 15 characters. We limit to
+-- 16 to allow for padding.
 nickColumnWidth :: Int
-nickColumnWidth = 20
+nickColumnWidth = 16
 
 maxTweetLength :: Int
 maxTweetLength = 140
 
-timelineUpdateThread :: TWInfo -> Chan TootEvent -> IO ()
-timelineUpdateThread twInfo chan = updateTimeline twInfo chan Nothing
+refreshInterval :: Integer
+refreshInterval = 120
 
 withSpinner :: Chan TootEvent -> IO a -> IO a
 withSpinner chan action = do
@@ -60,8 +73,8 @@ startSpinner chan = do
 
     forkIO $ threadBody `finally` (writeChan chan StopSpinner)
 
-updateTimeline :: TWInfo -> Chan TootEvent -> Maybe StatusId -> IO ()
-updateTimeline twInfo chan since = do
+timelineUpdateThread :: TWInfo -> Chan TootEvent -> Maybe StatusId -> IO ()
+timelineUpdateThread twInfo chan since = do
   let doFetch = do
           result <- withSpinner chan $ do
             writeChan chan $ Notify "notification" "Fetching..."
@@ -86,11 +99,16 @@ updateTimeline twInfo chan since = do
               threadDelay 10000000
       return since
 
-  forM_ [60,59..1] $ \(s::Integer) -> do
-      writeChan chan $ Notify "notification" $ T.concat ["Reloading in ", T.pack $ show s, " sec"]
+  forM_ (enumFromThenTo refreshInterval (refreshInterval - 1) 1) $ \(s::Integer) -> do
+      let mins = s `div` 60
+          secs = s `mod` 60
+          minStr = if mins == 0 then "" else show mins <> "m"
+          secStr = show secs <> "s"
+          timeStr = minStr <> secStr
+      writeChan chan $ Notify "notification" $ T.concat ["Next refresh: ", T.pack timeStr]
       threadDelay $ 1 * 1000 * 1000
 
-  updateTimeline twInfo chan $ next <|> since
+  timelineUpdateThread twInfo chan next
 
 data St =
     St { _timeline :: [Status]
@@ -113,7 +131,7 @@ tweetEditTooLong = "tweetEditTooLong"
 
 theAttrMap :: AttrMap
 theAttrMap = attrMap (V.white `on` V.black)
-    [ ("notification",          fg V.green)
+    [ ("notification",          fg V.cyan)
     , ("error",                 fg V.red)
     , ("header",                fg V.cyan)
     , ("nickname",              fg V.magenta)
@@ -149,19 +167,17 @@ appEvent e st =
 
 mkTimelineEntry :: Status -> Widget
 mkTimelineEntry st =
-    let isRT = case st^.statusRetweeted of
+    let isRT = case st^.statusRetweetedStatus of
                  Nothing -> False
-                 Just True -> True
-                 Just False -> False
-
+                 Just _ -> True
         uname = st^.statusUser.userScreenName
         tweet = st^.statusText
         tweetAttr = if isRT then "retweet" else def
         nick = withAttr "nickname" $ txt uname
-        msg = padRight $ txt tweet
-        paddedNick = padLeft nick
 
-    in withDefaultAttr tweetAttr $ (hLimit nickColumnWidth paddedNick) <+> ": " <+> msg
+    in withDefaultAttr tweetAttr $
+       padRight $
+       (hLimit nickColumnWidth (padLeft nick)) <+> ": " <+> (txt tweet)
 
 drawTimeline :: [Status] -> Widget
 drawTimeline ss = viewport "timeline" Vertical $ vBox $ mkTimelineEntry <$> ss
@@ -189,7 +205,7 @@ drawUI st = [withBorderStyle unicode ui]
                              Nothing -> txt " "
                          , " "
                          , case st^.spinnerState of
-                             Nothing -> str " "
+                             Nothing -> emptyWidget
                              Just c -> str [c]
                          ]
                   , hBorder
@@ -216,6 +232,24 @@ app =
         , appAttrMap = const theAttrMap
         , appMakeVtyEvent = VtyEvent
         }
+
+tweetCacheFile :: FilePath
+tweetCacheFile = "tweetcache.txt"
+
+readTweetCache :: IO (Maybe [Status])
+readTweetCache =
+    A.decode <$> (BSL.readFile tweetCacheFile `catch` \(_::SomeException) -> return "[]")
+
+tweetsToCache :: Int
+tweetsToCache = 100
+
+writeTweetCache :: [Status] -> IO ()
+writeTweetCache =
+    BSL.writeFile tweetCacheFile
+    . A.encode
+    . reverse
+    . take tweetsToCache
+    . reverse
 
 main :: IO ()
 main = do
@@ -249,6 +283,16 @@ main = do
                     , _help = []
                     }
 
+    -- Attempt to read tweet cache
+    mCacheData <- readTweetCache
+    let cacheData = maybe [] id mCacheData
+        lastStatus = if null cacheData
+                     then Nothing
+                     else Just $ (last cacheData)^.statusId
+
     timelineUpdateChan <- newChan
-    forkIO $ timelineUpdateThread twInfo timelineUpdateChan
-    void $ customMain (V.mkVty def) timelineUpdateChan app initSt
+    forkIO $ timelineUpdateThread twInfo timelineUpdateChan lastStatus
+    finalState <- customMain (V.mkVty def) timelineUpdateChan app $ initSt & timeline .~ cacheData
+
+    -- Attempt to read tweet cache
+    writeTweetCache $ finalState^.timeline
