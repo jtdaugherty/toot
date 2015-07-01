@@ -17,6 +17,7 @@ executable toot
   build-depends:     base,
                      transformers,
                      monad-logger,
+                     data-default,
                      text,
                      text-icu,
                      bytestring,
