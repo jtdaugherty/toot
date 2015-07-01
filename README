@@ -7,17 +7,16 @@ Features for now:
   * Refreshes once per minute.
   * Extremely likely to exceed twitter's API rate limit, as the limit is
     totally unreasonable.
+  * Caches tweets on exit and loads the cache on startup.
 
 To build:
 
   git clone https://github.com/jtdaugherty/toot.git
-  git clone https://github.com/jtdaugherty/vty-ui.git
-  git clone https://github.com/jtdaugherty/vty-ui-extras.git
+  git clone https://github.com/jtdaugherty/brick.git
   cabal update
   cd toot
   cabal sandbox init
-  cabal sandbox add-source ../vty-ui
-  cabal sandbox add-source ../vty-ui-extras
+  cabal sandbox add-source ../brick
   cabal install -j
 
 To run this program, you'll need a configuration file containing OAuth
