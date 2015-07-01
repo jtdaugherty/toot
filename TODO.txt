@@ -1,0 +1,12 @@
+Replace entities (&amp;)
+Highlight hashtags, mentions, URLs in tweets and editor
+Do something with media?
+Support posting tweets (and make editing UI hidden until requested to
+prevent accidental tweeting)
+Mark replies to (or mentions of) you with a special color
+Support scrolling through tweets to select one to reply to
+
+Settings UI
+ * Show/hide retweets
+ * Number of tweets to keep around
+ * One day: account info?
