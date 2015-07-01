@@ -29,5 +29,4 @@ main = do
     forkIO $ timelineUpdateThread twInfo refreshInterval timelineUpdateChan lastStatus
     finalState <- customMain (mkVty def) timelineUpdateChan app $ initialAppState & timeline .~ cacheData
 
-    -- Attempt to read tweet cache
     writeTweetCache $ finalState^.timeline
