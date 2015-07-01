@@ -15,7 +15,6 @@ import qualified Data.Text as T
 import qualified Graphics.Vty as V
 import Web.Twitter.Types.Lens
 
-import Brick.Core
 import Brick.AttrMap
 import Brick.Widgets.Edit
 
