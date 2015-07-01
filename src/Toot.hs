@@ -229,6 +229,10 @@ app =
     App { appDraw = drawUI
         , appChooseCursor = showFirstCursor
         , appHandleEvent = appEvent
+        , appStartEvent = \st -> do
+            let timelineScroll = viewportScroll "timeline"
+            scrollToEnd timelineScroll
+            return st
         , appAttrMap = const theAttrMap
         , appMakeVtyEvent = VtyEvent
         }
