@@ -13,8 +13,8 @@ import Brick.Core
 
 import Types
 
-handleAppEvent :: TootEvent -> St -> EventM (Next St)
-handleAppEvent e st =
+handleAppEvent :: St -> TootEvent -> EventM (Next St)
+handleAppEvent st e =
     let timelineScroll = viewportScroll "timeline"
     in case e of
         VtyEvent (V.EvKey V.KEsc []) -> halt st
