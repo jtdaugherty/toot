@@ -35,4 +35,3 @@ initialAppState =
        , _notification = Nothing
        , _help = []
        }
-
