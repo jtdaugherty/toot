@@ -9,7 +9,7 @@ import Control.Lens ((.~), (&), (%~))
 import qualified Graphics.Vty as V
 
 import Brick.Main
-import Brick.Core
+import Brick.Types
 
 import Types
 
