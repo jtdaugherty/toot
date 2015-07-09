@@ -60,8 +60,8 @@ mkTimelineEntry st =
         nick = withAttr "nickname" $ txt uname
 
     in withDefaultAttr tweetAttr $
-       padRight $
-       (hLimit nickColumnWidth (padLeft nick)) <+> ": " <+> (txt tweet)
+       padRight Max $
+       (hLimit nickColumnWidth (padLeft Max nick)) <+> ": " <+> (txt tweet)
 
 drawTimeline :: [Status] -> Widget
 drawTimeline ss = viewport "timeline" Vertical $ vBox $ mkTimelineEntry <$> ss
@@ -74,11 +74,11 @@ drawUI st = [withBorderStyle unicode ui]
 
         editUi = vLimit 1 $ paddedNick <+> ": " <+> (withDefaultAttr tweetEditAttr $ renderEditor (st^.editTweet))
 
-        tweetEditAttr = if (length $ st^.editTweet.editContentsL) <= maxTweetLength
+        tweetEditAttr = if (length $ getEditContents $ st^.editTweet) <= maxTweetLength
                         then tweetEditOkay
                         else tweetEditTooLong
 
-        tweetLengthAttr = if (length $ st^.editTweet.editContentsL) <= maxTweetLength
+        tweetLengthAttr = if (length $ getEditContents $ st^.editTweet) <= maxTweetLength
                           then def
                           else tweetLengthTooLong
 
@@ -94,7 +94,7 @@ drawUI st = [withBorderStyle unicode ui]
                <+> characterCount
                <+> hLimit 1 hBorder
         characterCount = withAttr tweetLengthAttr $
-               (str $ show $ length $ st^.editTweet.editContentsL)
+               (str $ show $ length $ getEditContents $ st^.editTweet)
                <+> "/"
                <+> (str $ show maxTweetLength)
         header =  withAttr "header" "toot!"
